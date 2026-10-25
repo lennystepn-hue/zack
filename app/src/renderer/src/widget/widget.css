@@ -1,0 +1,406 @@
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  background: transparent;
+  overflow: hidden;
+}
+
+body {
+  font: 500 11.5px/1.25 -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
+  color: #efe9e1;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  cursor: default;
+}
+
+.zw {
+  --pill: rgba(17, 13, 10, 0.84);
+  --line: rgba(255, 210, 160, 0.13);
+  --accent: #ffb35c;
+  --ink: #f1ebe3;
+  --muted: rgba(241, 235, 227, 0.56);
+  --radius: 12px;
+  position: relative;
+  width: 260px;
+  height: 330px;
+  color: var(--ink);
+}
+
+.zw[data-theme='rift'] {
+  --pill: rgba(15, 11, 10, 0.86);
+  --line: rgba(255, 150, 80, 0.16);
+  --accent: #ff8a3d;
+}
+
+.zw[data-theme='toaster'] {
+  --accent: #ff9f43;
+  --line: rgba(255, 255, 255, 0.12);
+}
+
+.zw[data-theme='liquid'] {
+  --pill: rgba(14, 16, 19, 0.84);
+  --line: rgba(220, 230, 240, 0.16);
+  --accent: #cfd8e3;
+}
+
+.zw[data-theme='monster'] {
+  --pill: rgba(12, 22, 17, 0.86);
+  --line: rgba(120, 230, 170, 0.18);
+  --accent: #5fd39c;
+}
+
+.zw[data-theme='warp'] {
+  --pill: #133b20;
+  --line: #06140b;
+  --accent: #ffe45e;
+  --ink: #f2ffe6;
+  --muted: #a8d99b;
+  --radius: 0;
+  font-family: 'Silkscreen', ui-monospace, monospace;
+}
+
+.stage {
+  position: absolute;
+  inset: 0;
+  transition: opacity 0.18s ease, filter 0.18s ease;
+}
+
+.stage.fading {
+  opacity: 0;
+  filter: blur(6px);
+}
+
+.stage canvas {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+}
+
+.stage canvas.pixel {
+  image-rendering: pixelated;
+}
+
+.stage canvas.fx {
+  z-index: 2;
+}
+
+/* status line, which doubles as the handle for moving the widget */
+.info {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 234px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.pill {
+  grid-area: 1 / 1;
+  background: var(--pill);
+  box-shadow: inset 0 0 0 1px var(--line), 0 8px 20px -8px rgba(0, 0, 0, 0.7);
+  border-radius: var(--radius);
+  transition: opacity 0.22s ease, transform 0.22s ease;
+}
+
+.status {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 24px;
+  padding: 0 11px 0 9px;
+  max-width: 224px;
+  cursor: grab;
+  opacity: 0;
+  transform: translateY(4px);
+}
+
+/* the name and the shelf stay out of sight until you reach for the portal */
+.zw.hovered .status,
+.zw.status-on .status {
+  opacity: 1;
+  transform: none;
+}
+
+.stage {
+  cursor: grab;
+}
+
+.zw.moving,
+.zw.moving * {
+  cursor: grabbing !important;
+}
+
+.status .txt {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.005em;
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex: none;
+  background: #6d675f;
+  transition: background 0.3s ease;
+}
+
+.dot.on {
+  background: #5fdc8b;
+  box-shadow: 0 0 0 3px rgba(95, 220, 139, 0.16);
+}
+
+.dot.away {
+  background: #e3ad4c;
+}
+
+.dot.busy {
+  background: var(--accent);
+  animation: pulse 0.9s ease-in-out infinite;
+}
+
+.dot.err {
+  background: #ff5a52;
+}
+
+.dot.hollow {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--muted);
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.caption {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 6px 13px 7px;
+  max-width: 236px;
+  opacity: 0;
+  transform: translateY(5px) scale(0.98);
+}
+
+.caption b {
+  display: block;
+  max-width: 210px;
+  font-weight: 600;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.caption small {
+  display: block;
+  max-width: 210px;
+  margin-top: 2px;
+  font-size: 10.5px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.captioned .caption {
+  opacity: 1;
+  transform: none;
+}
+
+.captioned .status {
+  opacity: 0;
+  transform: translateY(-5px);
+  pointer-events: none;
+}
+
+/* recent things, newest first */
+.shelf {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 281px;
+  height: 34px;
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  z-index: 3;
+  opacity: 0;
+  transform: translateY(6px);
+  pointer-events: none;
+  transition: opacity 0.22s ease, transform 0.22s ease;
+}
+
+.zw.hovered .shelf,
+.zw.peek .shelf {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+}
+
+.zw.moving .shelf,
+.zw.moving .status {
+  opacity: 0;
+}
+
+.chip {
+  position: relative;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  background: var(--pill);
+  box-shadow: inset 0 0 0 1px var(--line);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: transform 0.16s ease, box-shadow 0.16s ease;
+}
+
+.chip img {
+  width: 34px;
+  height: 34px;
+  object-fit: contain;
+  pointer-events: none;
+  -webkit-user-drag: none;
+}
+
+.chip:hover {
+  transform: translateY(-2px);
+  box-shadow: inset 0 0 0 1px var(--accent), 0 6px 14px -6px rgba(0, 0, 0, 0.8);
+}
+
+.chip::after {
+  content: '';
+  position: absolute;
+  right: 3px;
+  top: 3px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+}
+
+.chip.in::after {
+  background: var(--accent);
+}
+
+.chip.out::after {
+  background: var(--muted);
+  opacity: 0.6;
+}
+
+.chip.fresh {
+  animation: land 0.42s cubic-bezier(0.2, 1.5, 0.4, 1);
+}
+
+@keyframes land {
+  0% {
+    transform: scale(0.82);
+  }
+  100% {
+    transform: none;
+  }
+}
+
+/* the three buttons that unfold on click */
+.actions {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 200px;
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  z-index: 4;
+  pointer-events: none;
+}
+
+.actions button {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--pill);
+  color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--line), 0 8px 18px -8px #000;
+  display: grid;
+  place-items: center;
+  opacity: 0;
+  transform: translateY(8px) scale(0.85);
+  transition: opacity 0.18s ease, transform 0.22s cubic-bezier(0.2, 1.4, 0.4, 1), color 0.15s;
+  cursor: pointer;
+}
+
+.actions button:nth-child(2) {
+  transition-delay: 0.03s;
+}
+
+.actions button:nth-child(3) {
+  transition-delay: 0.06s;
+}
+
+.show-actions .actions button {
+  pointer-events: auto;
+  opacity: 1;
+  transform: none;
+}
+
+.actions button:hover {
+  color: var(--accent);
+}
+
+.actions svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* pixel theme: hard corners, bevels, a bitmap font */
+.zw[data-theme='warp'] .pill,
+.zw[data-theme='warp'] .chip,
+.zw[data-theme='warp'] .actions button {
+  border-radius: 0;
+  box-shadow: 0 0 0 2px #06140b, inset 2px 2px 0 rgba(255, 255, 255, 0.14), inset -2px -2px 0 rgba(0, 0, 0, 0.35);
+}
+
+.zw[data-theme='warp'] .status .txt,
+.zw[data-theme='warp'] .caption b,
+.zw[data-theme='warp'] .caption small {
+  font-family: 'Silkscreen', ui-monospace, monospace;
+  font-size: 8px;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.zw[data-theme='warp'] .caption small {
+  margin-top: 4px;
+}
+
+.zw[data-theme='warp'] .dot {
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.zw[data-theme='warp'] .chip img {
+  image-rendering: pixelated;
+}

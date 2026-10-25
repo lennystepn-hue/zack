@@ -1,0 +1,20 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "zack-portal",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-01",
+  "durable_objects": {
+    "bindings": [
+      { "name": "ROOMS", "class_name": "Room" },
+      { "name": "PAIRS", "class_name": "PairSlot" }
+    ]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Room", "PairSlot"] }],
+  "ratelimits": [
+    { "name": "PAIR_LIMIT", "namespace_id": "4201", "simple": { "limit": 20, "period": 60 } },
+    { "name": "CREATE_LIMIT", "namespace_id": "4202", "simple": { "limit": 10, "period": 60 } },
+    { "name": "UPLOAD_LIMIT", "namespace_id": "4203", "simple": { "limit": 240, "period": 60 } }
+  ],
+  "r2_buckets": [{ "binding": "BLOBS", "bucket_name": "zack-portal-blobs" }],
+  "observability": { "enabled": true }
+}

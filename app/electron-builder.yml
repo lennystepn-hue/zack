@@ -1,0 +1,54 @@
+appId: services.lenny.zack
+productName: Zack
+copyright: © 2026 Lenny Enderle
+directories:
+  output: dist
+  buildResources: build
+files:
+  - out/**
+  - resources/**
+  - package.json
+  - '!out/renderer/stage.html'
+  - '!**/*.map'
+asarUnpack:
+  - resources/**
+
+mac:
+  category: public.app-category.productivity
+  icon: build/icon.png
+  # no Developer ID yet: ad-hoc signature, so Apple Silicon will run it
+  identity: '-'
+  hardenedRuntime: false
+  extendInfo:
+    LSUIElement: true
+  target:
+    - target: dmg
+      arch: [arm64, x64]
+dmg:
+  title: Zack
+  artifactName: Zack-${version}-mac-${arch}.${ext}
+
+win:
+  icon: build/icon.png
+  artifactName: Zack-${version}-win-${arch}.${ext}
+  # nsis/portable need makensis, which only ships for Intel Macs; CI builds those on Windows
+  target:
+    - target: zip
+      arch: [x64, arm64]
+nsis:
+  oneClick: true
+  perMachine: false
+  createDesktopShortcut: true
+  shortcutName: Zack
+  artifactName: Zack-${version}-win-setup.${ext}
+
+linux:
+  icon: build/icon.png
+  category: Utility
+  maintainer: Lenny Enderle
+  synopsis: A portal between your computers
+  target:
+    - target: AppImage
+      arch: [x64]
+appImage:
+  artifactName: Zack-${version}-linux-x64.${ext}

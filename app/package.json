@@ -1,0 +1,40 @@
+{
+  "name": "zack",
+  "productName": "Zack",
+  "version": "1.0.0",
+  "description": "A portal between your computers. Drop anything in, it comes out on the other side.",
+  "author": "Lenny Enderle",
+  "homepage": "https://lenny.services",
+  "main": "out/main/index.js",
+  "private": true,
+  "scripts": {
+    "dev": "electron-vite dev",
+    "dev:b": "ZACK_PROFILE=b electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test:core": "node scripts/e2e-core.ts",
+    "icons": "node scripts/make-icons.ts",
+    "dist:mac": "electron-vite build && electron-builder --mac",
+    "dist:win": "electron-vite build && electron-builder --win",
+    "dist:linux": "electron-vite build && electron-builder --linux",
+    "dist": "electron-vite build && electron-builder --mac --win --linux",
+    "stage": "vite --config vite.preview.config.ts"
+  },
+  "dependencies": {
+    "yauzl": "^3.4.0",
+    "yazl": "^3.3.1"
+  },
+  "devDependencies": {
+    "@fontsource/jetbrains-mono": "^5.3.0",
+    "@fontsource/silkscreen": "^5.3.0",
+    "@types/node": "^24.0.0",
+    "@types/yauzl": "^3.4.0",
+    "@types/yazl": "^3.3.1",
+    "electron": "^45.0.0",
+    "electron-builder": "^26.18.0",
+    "electron-vite": "^6.0.0",
+    "typescript": "^5.9.3",
+    "vite": "^8.3.5"
+  }
+}

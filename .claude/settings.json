@@ -1,0 +1,5 @@
+{
+  "hooks": {
+    "SessionStart": [{ "hooks": [{ "type": "command", "command": "node scripts/cloud-session-start.mjs", "timeout": 300 }] }]
+  }
+}

@@ -1,0 +1,181 @@
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: auto;
+  background: #0b0a09;
+}
+
+main {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  font: 500 13px/1.3 -apple-system, BlinkMacSystemFont, 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
+  color: #ece6dd;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 14px 20px;
+  border-bottom: 1px solid #1f1c19;
+  flex-wrap: wrap;
+}
+
+.brand {
+  font: 700 18px/1 'JetBrains Mono', ui-monospace, monospace;
+  letter-spacing: -0.02em;
+}
+
+.brand span {
+  color: #ffb35c;
+}
+
+header nav {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+header button {
+  appearance: none;
+  border: 0;
+  background: #1a1815;
+  color: #cfc8bd;
+  font: inherit;
+  font-size: 12px;
+  padding: 7px 11px;
+  border-radius: 8px;
+  box-shadow: inset 0 0 0 1px #2a2622;
+  cursor: pointer;
+}
+
+header button:hover {
+  color: #fff;
+}
+
+header button.on {
+  background: #ece6dd;
+  color: #12100e;
+  box-shadow: none;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.floor {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  min-height: 560px;
+}
+
+.stage-grid .floor {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.desk {
+  position: relative;
+  overflow: hidden;
+  min-height: 520px;
+}
+
+/* two invented wallpapers, so the transparent widgets have something behind them */
+.desk.mac,
+.desk.solo.mac {
+  background:
+    radial-gradient(120% 90% at 20% 10%, #f3b27a 0%, transparent 55%),
+    radial-gradient(90% 80% at 85% 30%, #3f8f8c 0%, transparent 60%),
+    radial-gradient(120% 120% at 50% 110%, #263a6b 0%, #131a33 70%);
+}
+
+.desk.win {
+  background:
+    radial-gradient(70% 60% at 70% 35%, #2f7de1 0%, transparent 65%),
+    radial-gradient(80% 70% at 20% 80%, #0c3f7a 0%, transparent 70%),
+    linear-gradient(160deg, #0a1730, #050b18);
+}
+
+.stage-solo .floor {
+  grid-template-columns: 1fr;
+}
+
+.stage-solo header {
+  display: none;
+}
+
+.desk.solo {
+  min-height: 100vh;
+}
+
+.desk.solo.dark {
+  background: #0d0f14;
+}
+
+.desk.solo.light {
+  background: linear-gradient(160deg, #e9e4dc, #cfd8e3);
+}
+
+.desk.solo .wrap {
+  right: 50%;
+  margin-right: calc(-130px * var(--s));
+  top: 50%;
+  bottom: auto;
+  margin-top: calc(-165px * var(--s));
+}
+
+.desk.grid {
+  background: radial-gradient(100% 80% at 50% 0%, #3a3027 0%, #121110 70%);
+}
+
+.desk.grid:nth-child(2) {
+  background: radial-gradient(100% 80% at 50% 0%, #6aa3d8 0%, #2d5e8c 60%, #1b3a5a 100%);
+}
+
+.os {
+  position: absolute;
+  left: 20px;
+  top: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.5);
+}
+
+.os b {
+  font-size: 15px;
+}
+
+.os span {
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.wrap {
+  position: absolute;
+  right: 40px;
+  bottom: 40px;
+  width: calc(260px * var(--s));
+  height: calc(330px * var(--s));
+}
+
+.desk.grid .wrap {
+  right: 50%;
+  margin-right: calc(-130px * var(--s));
+  bottom: 50%;
+  margin-bottom: calc(-165px * var(--s));
+}
+
+.wrap .w {
+  transform: scale(var(--s));
+  transform-origin: 0 0;
+}
+
+@media (max-width: 760px) {
+  .floor,
+  .stage-grid .floor {
+    grid-template-columns: 1fr;
+  }
+}
