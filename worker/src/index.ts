@@ -4,13 +4,16 @@
 
 import { Room } from './room';
 import { PairSlot } from './pair';
+import { Quota } from './quota';
 import { b64url, deletePrefix, hmac, json, safeEqual } from './util';
 
-export { Room, PairSlot };
+export { Room, PairSlot, Quota };
 
 export interface Env {
   ROOMS: DurableObjectNamespace<Room>;
   PAIRS: DurableObjectNamespace<PairSlot>;
+  QUOTA: DurableObjectNamespace<Quota>;
+  DAILY_UPLOAD_GB: string;
   BLOBS: R2Bucket;
   PAIR_LIMIT: RateLimit;
   CREATE_LIMIT: RateLimit;
@@ -118,6 +121,9 @@ export default {
             if (await limited(env.UPLOAD_LIMIT, req)) return json({ error: 'slow_down' }, 429);
             const len = Number(req.headers.get('content-length') ?? NaN);
             if (!Number.isFinite(len) || len <= 0 || len > MAX_CHUNK) return json({ error: 'bad_length' }, 413);
+            const limit = (Number(env.DAILY_UPLOAD_GB) || 10) * 1e9;
+            const quota = await env.QUOTA.get(env.QUOTA.idFromName('relay')).reserve(len, limit);
+            if (!quota.ok) return json({ error: 'daily_limit' }, 429, { 'x-zack-limit': 'daily', 'retry-after': String(secondsToMidnight()) });
             await env.BLOBS.put(key, req.body, { httpMetadata: { contentType: 'application/octet-stream' } });
             return new Response(null, { status: 201, headers: cors });
           }
@@ -139,3 +145,8 @@ export default {
     }
   },
 } satisfies ExportedHandler<Env>;
+
+function secondsToMidnight() {
+  const now = new Date();
+  return Math.ceil((Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1) - now.getTime()) / 1000);
+}

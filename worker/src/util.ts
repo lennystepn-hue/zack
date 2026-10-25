@@ -1,7 +1,7 @@
-export function json(body: unknown, status = 200) {
+export function json(body: unknown, status = 200, headers: Record<string, string> = {}) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { 'content-type': 'application/json', 'access-control-allow-origin': '*' },
+    headers: { 'content-type': 'application/json', 'access-control-allow-origin': '*', ...headers },
   });
 }
 

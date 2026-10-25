@@ -14,7 +14,7 @@ jobs:
       matrix:
         include:
           - os: macos-latest
-            target: --mac dmg
+            target: --mac
           - os: windows-latest
             target: --win nsis portable --x64
           - os: ubuntu-latest

@@ -6,10 +6,16 @@
   "durable_objects": {
     "bindings": [
       { "name": "ROOMS", "class_name": "Room" },
-      { "name": "PAIRS", "class_name": "PairSlot" }
+      { "name": "PAIRS", "class_name": "PairSlot" },
+      { "name": "QUOTA", "class_name": "Quota" }
     ]
   },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Room", "PairSlot"] }],
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["Room", "PairSlot"] },
+    { "tag": "v2", "new_sqlite_classes": ["Quota"] }
+  ],
+  // ceiling on what the whole relay accepts per UTC day
+  "vars": { "DAILY_UPLOAD_GB": "10" },
   "ratelimits": [
     { "name": "PAIR_LIMIT", "namespace_id": "4201", "simple": { "limit": 20, "period": 60 } },
     { "name": "CREATE_LIMIT", "namespace_id": "4202", "simple": { "limit": 10, "period": 60 } },

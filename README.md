@@ -27,7 +27,8 @@ Six looks, each with its own animation and synthesized sound:
 - **Pairing** with an 8-character one-shot code that expires after 10 minutes. The relay only sees a slow hash of it; the portal key travels inside an envelope sealed with a second derivation of the code. Pairing endpoints are rate limited.
 - **Removing a device rotates the portal**: the remaining devices get a new room and key (sent encrypted under the old one), so the removed one can't read anything afterwards.
 - **Streaming**: the receiver fetches each 4 MiB chunk as soon as it's uploaded.
-- **Offline delivery**: drops wait in the portal for 24 h (text for 30 days) and arrive when the device comes back.
+- **Nothing is kept**: ciphertext is deleted from R2 the moment every recipient has it (typically within a second of arrival).
+- **Offline delivery**: only for a device that is away, drops wait in the portal for 24 h (text for 30 days) and arrive when it comes back. An R2 lifecycle rule removes anything orphaned after two days.
 - **Folders and apps** travel as zips with permissions and symlinks intact (`.app` bundles still run), and are unpacked on arrival with path-traversal checks.
 - Received files are never opened automatically; a click on an executable only reveals it.
 - The Electron app runs sandboxed with context isolation, a strict CSP, IPC sender checks, no navigation and no new windows. Room secrets live in the OS keychain (DPAPI / Keychain / libsecret) where that is available.
@@ -67,7 +68,7 @@ openssl rand -base64 48 | npx wrangler secret put ROOM_SECRET
 cd ../app && ZACK_SERVER=https://<your-worker>.workers.dev npm run dist:mac
 ```
 
-The relay is public by design (it only ever sees ciphertext): room creation, pairing and uploads are rate-limited per IP, and everything in R2 expires within two days.
+The relay is public by design (it only ever sees ciphertext): room creation, pairing and uploads are rate-limited per IP, the whole relay accepts at most `DAILY_UPLOAD_GB` (10 GB) per UTC day, and everything in R2 expires within two days.
 
 `.github/workflows/build.yml` builds the Windows installer, a portable exe, the Mac DMG and Linux AppImage/deb natively on GitHub Actions.
 

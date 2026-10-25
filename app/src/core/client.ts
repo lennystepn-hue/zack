@@ -467,6 +467,8 @@ export class PortalClient extends EventEmitter<ClientEvents> {
         if (DEBUG) console.log(`[zack] ${method} ${path} ${res.status} headers after ${Date.now() - t0}ms`);
         if (res.ok) return res;
         if (res.status === 404 && method === 'GET') throw new PortalError('expired');
+        // the relay's daily allowance is used up: no point retrying until tomorrow
+        if (res.status === 429 && res.headers.get('x-zack-limit') === 'daily') throw new PortalError('daily_limit');
         // 429: the relay asks us to slow down; back off and try again like a 5xx
         if (res.status < 500 && res.status !== 429) throw new PortalError(`http_${res.status}`);
         lastErr = new Error(`relay ${res.status}`);

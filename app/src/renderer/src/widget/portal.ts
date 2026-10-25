@@ -439,6 +439,7 @@ export class PortalWidget {
       cancelled: ['Abgebrochen', 'Cancelled'],
       corrupt: ['Daten beschädigt, verworfen', 'Corrupted, discarded'],
       text_too_long: ['Text zu lang', 'Text too long'],
+      daily_limit: ['Tageslimit erreicht, morgen geht’s weiter', 'Daily limit reached, back tomorrow'],
     };
     const m = map[code] ?? ['Fehlgeschlagen', 'Failed'];
     return `× ${de ? m[0] : m[1]}`;
