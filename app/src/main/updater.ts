@@ -20,9 +20,15 @@ const REPO = 'lennystepn-hue/zack';
 const LATEST = `https://api.github.com/repos/${REPO}/releases/latest`;
 const DOWNLOAD = `https://github.com/${REPO}/releases/download`;
 export const RELEASES_PAGE = `https://github.com/${REPO}/releases/latest`;
+// a copy built against another relay would be "updated" onto this one
+const OFFICIAL_RELAY = 'https://zack-portal.lennystepn.workers.dev';
 const MAX_SIZE = 400 * 1024 * 1024;
 const EVERY = 6 * 60 * 60 * 1000;
 const BUNDLE_ID = 'services.lenny.zack';
+// On a Mac an update has to carry this team's Developer ID signature as well,
+// so a file swapped on the release page is refused even with a fitting checksum.
+const TEAM_ID = 'UKP7WY42H3';
+const SIGNED_BY_US = `=anchor apple generic and identifier "${BUNDLE_ID}" and certificate 1[field.1.2.840.113635.100.6.2.6] exists and certificate leaf[field.1.2.840.113635.100.6.1.13] exists and certificate leaf[subject.OU] = "${TEAM_ID}"`;
 
 const run = promisify(execFile);
 
@@ -32,7 +38,7 @@ const get = (url: string, headers: Record<string, string> = {}) =>
   fetch(url, { headers: { 'user-agent': `Zack/${app.getVersion()}`, ...headers }, signal: AbortSignal.timeout(20_000) });
 
 class UpdateError extends Error {
-  constructor(readonly code: 'network' | 'checksum' | 'install') {
+  constructor(readonly code: 'network' | 'checksum' | 'signature' | 'install') {
     super(code);
   }
 }
@@ -105,14 +111,14 @@ while kill -0 "$pid" 2>/dev/null; do sleep 0.2; done
 exec "$@"`;
 
 export class Updater extends EventEmitter {
-  state: UpdateState = { phase: 'idle' };
+  state: UpdateState = __ZACK_SERVER__ === OFFICIAL_RELAY ? { phase: 'idle' } : { phase: 'off' };
   private latest: { version: string; tag: string } | null = null;
   // the download sits in our own profile folder until it is installed
   private dir = join(app.getPath('userData'), 'update');
 
   start() {
     void rm(this.dir, { recursive: true, force: true }).catch(() => {});
-    if (!app.isPackaged) return;
+    if (!app.isPackaged || this.state.phase === 'off') return;
     setTimeout(() => void this.check(false), 30_000).unref();
     setInterval(() => void this.check(false), EVERY).unref();
   }
@@ -124,7 +130,7 @@ export class Updater extends EventEmitter {
 
   /** A check the user asked for shows its outcome; the periodic one only speaks up when there is something new. */
   async check(manual: boolean) {
-    if (this.state.phase === 'checking' || this.state.phase === 'downloading' || this.state.phase === 'installing') return;
+    if (['off', 'checking', 'downloading', 'installing'].includes(this.state.phase)) return;
     if (manual) this.set({ phase: 'checking' });
     try {
       const res = await get(LATEST, { accept: 'application/vnd.github+json' });
@@ -236,8 +242,12 @@ export class Updater extends EventEmitter {
     } finally {
       await run('/usr/bin/hdiutil', ['detach', mnt, '-force', '-quiet']).catch(() => {});
     }
-    // Zack quarantines what it writes. This copy matched the release's checksum,
-    // and with the flag the ad-hoc signed app would be refused as "damaged".
+    await run('/usr/bin/codesign', ['--verify', '--deep', '--strict', '--test-requirement', SIGNED_BY_US, staged]).catch(() => {
+      throw new UpdateError('signature');
+    });
+    // Zack quarantines what it writes. This copy is ours by checksum and
+    // signature; with the flag every update would start with Gatekeeper's
+    // "downloaded from the internet" question.
     await run('/usr/bin/xattr', ['-dr', 'com.apple.quarantine', staged]).catch(() => {});
     const args = process.argv.slice(1).filter((a) => !a.startsWith('-psn_'));
     spawn('/bin/sh', ['-c', SWAP_MAC, 'zack-update', String(process.pid), bundle, staged, ...args], { detached: true, stdio: 'ignore' }).unref();

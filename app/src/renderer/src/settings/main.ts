@@ -64,7 +64,7 @@ const T = {
     downloading: (p: number) => `Lädt… ${p} %`,
     installing: 'Wird installiert, Zack startet gleich neu…',
     tryAgain: 'Nochmal',
-    updateErrors: { network: 'GitHub ist gerade nicht erreichbar.', checksum: 'Die Prüfsumme passt nicht, das Update wurde verworfen.', install: 'Installieren hat nicht geklappt.' } as Record<string, string>,
+    updateErrors: { network: 'GitHub ist gerade nicht erreichbar.', checksum: 'Die Prüfsumme passt nicht, das Update wurde verworfen.', signature: 'Die Signatur stimmt nicht, das Update wurde verworfen.', install: 'Installieren hat nicht geklappt.' } as Record<string, string>,
     errors: { bad_code: 'Das ist kein gültiger Code.', unknown_code: 'Code unbekannt oder abgelaufen.', network: 'Keine Verbindung zum Relay.' } as Record<string, string>,
     ago: (m: number) => (m < 1 ? 'gerade eben' : m < 60 ? `vor ${m} Min.` : m < 1440 ? `vor ${Math.round(m / 60)} Std.` : `vor ${Math.round(m / 1440)} T.`),
   },
@@ -122,7 +122,7 @@ const T = {
     downloading: (p: number) => `Downloading… ${p}%`,
     installing: 'Installing, Zack restarts in a moment…',
     tryAgain: 'Try again',
-    updateErrors: { network: "Can't reach GitHub right now.", checksum: "The checksum doesn't match, so the update was thrown away.", install: "Installing didn't work." } as Record<string, string>,
+    updateErrors: { network: "Can't reach GitHub right now.", checksum: "The checksum doesn't match, so the update was thrown away.", signature: "The signature isn't ours, so the update was thrown away.", install: "Installing didn't work." } as Record<string, string>,
     errors: { bad_code: "That isn't a valid code.", unknown_code: 'Unknown or expired code.', network: "Can't reach the relay." } as Record<string, string>,
     ago: (m: number) => (m < 1 ? 'just now' : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} d ago`),
   },
@@ -274,6 +274,7 @@ function renderUpdate() {
   small.textContent = note;
   small.classList.toggle('bad', u.phase === 'error');
   document.getElementById('updVer')!.textContent = `Zack ${state.version}`;
+  document.getElementById('update')!.hidden = u.phase === 'off';
   const bar = document.getElementById('updBar')!;
   bar.hidden = u.phase !== 'downloading' && u.phase !== 'installing';
   (bar.firstElementChild as HTMLElement).style.width = `${u.phase === 'downloading' ? u.progress : 100}%`;

@@ -36,9 +36,63 @@ jobs:
           cache-dependency-path: app/package-lock.json
       - run: npm ci
       - run: npx electron-vite build
-      - run: npx electron-builder --publish never ${{ matrix.target }}
+
+      # macOS: the Developer ID certificate in a keychain of this run. Fork pull
+      # requests never see these secrets, and this workflow doesn't run for them.
+      - name: signing identity (macOS)
+        if: runner.os == 'macOS'
+        env:
+          APPLE_CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          if [ -z "$APPLE_CERTIFICATE_P12" ]; then
+            # a release must be signed: the app only installs signed updates
+            if [[ "$GITHUB_REF" == refs/tags/v* ]]; then echo "::error::no APPLE_CERTIFICATE_P12 secret, a release can't be signed"; exit 1; fi
+            echo "::warning::no APPLE_CERTIFICATE_P12 secret: this macOS build is ad-hoc signed"
+            exit 0
+          fi
+          keychain="$RUNNER_TEMP/zack.keychain-db"
+          password="$(openssl rand -base64 24)"
+          echo "$APPLE_CERTIFICATE_P12" | base64 --decode > "$RUNNER_TEMP/zack.p12"
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          security import "$RUNNER_TEMP/zack.p12" -k "$keychain" -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          rm "$RUNNER_TEMP/zack.p12"
+          # Apple's Developer ID G2 intermediate: without it the identity counts as untrusted
+          curl -fsSL -o "$RUNNER_TEMP/DeveloperIDG2CA.cer" https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer
+          security import "$RUNNER_TEMP/DeveloperIDG2CA.cer" -k "$keychain" || echo "the G2 intermediate is in the keychain already"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$password" "$keychain"
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          identity="$(security find-identity -v -p codesigning "$keychain" | grep -o '"Developer ID Application: [^"]*"' | head -1 | tr -d '"')"
+          if [ -z "$identity" ]; then echo "::error::APPLE_CERTIFICATE_P12 has no Developer ID Application identity"; exit 1; fi
+          echo "ZACK_SIGN_IDENTITY=${identity#Developer ID Application: }" >> "$GITHUB_ENV"
+
+      # signed builds get the hardened runtime and are notarized by Apple
+      - name: package
+        shell: bash
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: UKP7WY42H3
+        run: |
+          signed=()
+          if [ -n "$ZACK_SIGN_IDENTITY" ]; then
+            signed=(-c.mac.identity="$ZACK_SIGN_IDENTITY" -c.mac.hardenedRuntime=true -c.mac.notarize=true
+              -c.mac.entitlements=build/entitlements.mac.plist -c.mac.entitlementsInherit=build/entitlements.mac.plist)
+          fi
+          npx electron-builder --publish never ${{ matrix.target }} "${signed[@]}"
+
+      - name: check the signature (macOS)
+        if: runner.os == 'macOS' && env.ZACK_SIGN_IDENTITY != ''
+        run: |
+          for a in dist/mac*/Zack.app; do
+            codesign --verify --deep --strict --verbose=2 "$a"
+            codesign --verify --test-requirement '=anchor apple generic and certificate leaf[subject.OU] = "UKP7WY42H3"' "$a"
+            spctl --assess --type execute --verbose=4 "$a"
+            xcrun stapler validate "$a"
+          done
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: zack-${{ runner.os }}

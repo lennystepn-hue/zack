@@ -69,12 +69,13 @@ export interface PortalState {
 }
 
 export type UpdateState =
-  | { phase: 'idle' | 'checking' | 'current' }
+  /** off: built against another relay, so the official releases aren't its updates */
+  | { phase: 'idle' | 'checking' | 'current' | 'off' }
   /** auto: this copy can install it itself; otherwise the download page opens */
   | { phase: 'available'; version: string; auto: boolean }
   | { phase: 'downloading'; version: string; progress: number }
   | { phase: 'installing'; version: string }
-  | { phase: 'error'; error: 'network' | 'checksum' | 'install' };
+  | { phase: 'error'; error: 'network' | 'checksum' | 'signature' | 'install' };
 
 export interface PairCode {
   code: string;

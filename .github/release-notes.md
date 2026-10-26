@@ -22,10 +22,8 @@ From 0.2.1 on Zack updates itself: Settings → Updates → Update now, or the t
 
 ## First launch
 
-The builds aren't code-signed yet:
-
-- **macOS**: right-click Zack in Applications → **Open** the first time. If macOS says the app is damaged, run `xattr -cr /Applications/Zack.app`.
-- **Windows**: SmartScreen → **More info** → **Run anyway**.
+- **macOS**: signed with a Developer ID and notarized by Apple, it opens like any other app.
+- **Windows**: not signed yet, so SmartScreen asks once: **More info** → **Run anyway**.
 
 ## Check the download
 
