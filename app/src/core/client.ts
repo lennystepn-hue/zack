@@ -14,13 +14,17 @@ import {
   newRoomKey,
   normalizeCode,
   openChunk,
+  openName,
   openEnvelope,
   openMeta,
   pairSecrets,
   sealChunk,
   sealEnvelope,
   sealMeta,
+  sealName,
 } from './crypto.ts';
+
+const DROP_ID = /^[A-Za-z0-9_-]{16,64}$/;
 
 export interface RoomCreds {
   server: string;
@@ -33,6 +37,8 @@ export interface SelfInfo {
   id: string;
   name: string;
   platform: Platform;
+  /** binds this device id on the relay; nobody else can connect as us */
+  secret: string;
 }
 
 export interface DropMeta {
@@ -200,10 +206,10 @@ export class PortalClient extends EventEmitter<ClientEvents> {
     const url = new URL(`/v1/rooms/${this.room.roomId}/ws`, this.room.server);
     url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
     url.searchParams.set('d', this.self.id);
-    url.searchParams.set('n', this.self.name);
+    url.searchParams.set('n', sealName(this.room.key, this.self.name));
     url.searchParams.set('p', this.self.platform);
 
-    const ws = new WebSocket(url, ['zack.v1', `auth.${this.room.token}`]);
+    const ws = new WebSocket(url, ['zack.v1', `auth.${this.room.token}`, `dev.${this.self.secret}`]);
     this.ws = ws;
 
     ws.addEventListener('open', () => {
@@ -253,13 +259,15 @@ export class PortalClient extends EventEmitter<ClientEvents> {
     switch (msg.t) {
       case 'welcome':
       case 'presence':
-        this.devices = msg.devices;
+        this.devices = msg.devices.map((d) => ({ ...d, name: openName(this.room.key, d.name) }));
         this.emit('presence', msg.devices);
         return;
       case 'joined':
-        this.emit('joined', msg.device);
+        this.emit('joined', { ...msg.device, name: openName(this.room.key, msg.device.name) });
         return;
       case 'announce': {
+        // the id ends up in a file name: never trust the relay with that
+        if (!DROP_ID.test(msg.id)) return;
         try {
           const meta = openMeta<DropMeta>(dropKey(this.room.key, msg.id), msg.id, msg.env);
           if (meta.chunks !== msg.chunks) throw new Error('chunk count mismatch');
@@ -297,6 +305,8 @@ export class PortalClient extends EventEmitter<ClientEvents> {
         this.emit('delivered', msg.id, msg.by);
         return;
       case 'forgotten':
+        // removed from the portal: hang up and don't come back
+        this.stop();
         this.emit('forgotten');
         return;
     }
@@ -325,7 +335,7 @@ export class PortalClient extends EventEmitter<ClientEvents> {
 
   rename(name: string) {
     this.self = { ...this.self, name };
-    this.send({ t: 'rename', name });
+    this.send({ t: 'rename', name: sealName(this.room.key, name) });
   }
 
   forget(deviceId: string) {

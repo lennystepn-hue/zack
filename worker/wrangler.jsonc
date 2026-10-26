@@ -15,7 +15,7 @@
     { "tag": "v2", "new_sqlite_classes": ["Quota"] }
   ],
   // ceiling on what the whole relay accepts per UTC day
-  "vars": { "DAILY_UPLOAD_GB": "10" },
+  "vars": { "DAILY_UPLOAD_GB": "10", "DAILY_DOWNLOADS": "300000" },
   "ratelimits": [
     { "name": "PAIR_LIMIT", "namespace_id": "4201", "simple": { "limit": 20, "period": 60 } },
     { "name": "CREATE_LIMIT", "namespace_id": "4202", "simple": { "limit": 10, "period": 60 } },

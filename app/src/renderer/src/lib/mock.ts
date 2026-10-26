@@ -180,13 +180,13 @@ export function mockBridge(opts: MockOptions = {}): Bridge & { demo: Demo } {
       push();
     },
     createCode: async () => {
-      const code = { code: 'K7QM-2XRA', expires: Date.now() + 600_000 };
+      const code = { code: 'K7QM-2XRA-9PDF', expires: Date.now() + 600_000 };
       emit({ type: 'pair-code', code });
       setTimeout(() => demo.linked(), 6000);
       return code;
     },
     cancelCode: async () => emit({ type: 'pair-code', code: null }),
-    join: async (code) => (code.replace(/\W/g, '').length === 8 ? { ok: true as const } : { ok: false as const, error: 'unknown_code' }),
+    join: async (code) => (code.replace(/\W/g, '').length === 12 ? { ok: true as const } : { ok: false as const, error: 'unknown_code' }),
     unpair: async () => demo.unpaired(true),
     forget: async () => {},
     rename: async (name) => {

@@ -1,6 +1,6 @@
 import { app, nativeImage } from 'electron';
 import { createWriteStream } from 'node:fs';
-import { chmod, lstat, mkdir, readdir, readlink, rm, stat, symlink } from 'node:fs/promises';
+import { chmod, lstat, mkdir, open, readdir, readlink, realpath, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import { basename, dirname, extname, isAbsolute, join, posix, resolve, sep } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import yauzl from 'yauzl';
@@ -28,7 +28,8 @@ export function mimeOf(path: string) {
 /** A name from another machine is untrusted: no paths, no device names, nothing Windows would choke on. */
 export function safeName(name: string, fallback = 'file') {
   let n = name.replace(/\\/g, '/').split('/').pop() ?? '';
-  n = n.replace(/[\u0000-\u001f\u007f<>:"|?*]/g, '').replace(/^[.\s]+/, '').replace(/[.\s]+$/, '');
+  // control characters, characters Windows forbids, and bidi overrides that fake an extension ("Invoice\u202efdp.hta")
+  n = n.replace(/[\u0000-\u001f\u007f<>:"|?*\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, '').replace(/^[.\s]+/, '').replace(/[.\s]+$/, '');
   if (!n) n = fallback;
   if (RESERVED.test(n)) n = `_${n}`;
   if (n.length > 180) {
@@ -115,6 +116,11 @@ export async function unzipInto(zipPath: string, parent: string, wanted: string)
   );
   const target = await uniquePath(parent, safeName(wanted, 'Folder'));
   await mkdir(target, { recursive: true });
+  // a zip bomb stops here: at most this many entries and this many bytes unpacked
+  const zipBytes = (await stat(zipPath)).size;
+  const maxBytes = Math.min(64 * 1024 ** 3, Math.max(1024 ** 3, zipBytes * 200));
+  let entries = 0;
+  let unpacked = 0;
   // links are made last, so nothing ever gets written through one
   const links: { dest: string; to: string }[] = [];
   const inside = (p: string) => p === target || p.startsWith(target + sep);
@@ -129,6 +135,9 @@ export async function unzipInto(zipPath: string, parent: string, wanted: string)
         const inner = parts.length > 1 ? parts.slice(1) : parts;
         const dest = resolve(target, ...inner.map((p) => safeName(p, '_')));
         if (!inside(dest)) return zip.readEntry();
+        if (++entries > 200_000) throw new Error('zip has too many entries');
+        unpacked += entry.uncompressedSize;
+        if (unpacked > maxBytes) throw new Error('zip unpacks too large');
         const mode = (entry.externalFileAttributes >>> 16) & 0xffff;
         if (entry.fileName.endsWith('/')) {
           await mkdir(dest, { recursive: true });
@@ -145,6 +154,7 @@ export async function unzipInto(zipPath: string, parent: string, wanted: string)
           return zip.readEntry();
         }
         await pipeline(stream, createWriteStream(dest));
+        await markFromInternet(dest);
         // keep the executable bit (an app's binary needs it), never setuid and friends
         if (mode & 0o111 && process.platform !== 'win32') await chmod(dest, mode & 0o755);
         zip.readEntry();
@@ -157,9 +167,17 @@ export async function unzipInto(zipPath: string, parent: string, wanted: string)
   zip.close();
 
   if (process.platform !== 'win32') {
+    const root = await realpath(target);
     for (const l of links) {
-      if (isAbsolute(l.to) || !inside(resolve(dirname(l.dest), l.to))) continue;
-      await symlink(l.to, l.dest).catch(() => {});
+      // no absolute targets, no climbing: a chain of links could otherwise point out of the folder
+      if (isAbsolute(l.to) || l.to.split('/').includes('..') || !inside(resolve(dirname(l.dest), l.to))) continue;
+      try {
+        await symlink(l.to, l.dest);
+        const real = await realpath(l.dest).catch(() => null);
+        if (real && real !== root && !real.startsWith(root + sep)) await rm(l.dest, { force: true });
+      } catch {
+        // a link that can't be made is left out
+      }
     }
   }
   await rm(zipPath, { force: true });
@@ -205,4 +223,30 @@ export async function isDir(path: string) {
   } catch {
     return false;
   }
+}
+
+/**
+ * Marks a received file as downloaded, so the OS warns before running it:
+ * on macOS the app's LSFileQuarantineEnabled does this by itself, on Windows
+ * it is the Mark of the Web.
+ */
+export async function markFromInternet(path: string) {
+  if (process.platform !== 'win32') return;
+  await writeFile(`${path}:Zone.Identifier`, '[ZoneTransfer]\r\nZoneId=3\r\n').catch(() => {});
+}
+
+/** A real PNG, JPEG, GIF, WebP, HEIC, BMP or TIFF of a sane size, judged by its first bytes. */
+export async function isImageFile(path: string) {
+  const st = await stat(path).catch(() => null);
+  if (!st || st.size > 40 * 1024 * 1024) return false;
+  const fh = await open(path, 'r');
+  const b = Buffer.alloc(12);
+  await fh.read(b, 0, 12, 0);
+  await fh.close();
+  const hex = b.toString('hex');
+  return (
+    hex.startsWith('89504e47') || hex.startsWith('ffd8ff') || hex.startsWith('47494638') || hex.startsWith('424d') ||
+    hex.startsWith('49492a00') || hex.startsWith('4d4d002a') || (hex.startsWith('52494646') && b.toString('ascii', 8, 12) === 'WEBP') ||
+    b.toString('ascii', 4, 8) === 'ftyp'
+  );
 }

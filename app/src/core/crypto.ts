@@ -1,14 +1,17 @@
 // Everything that leaves a device is sealed here first.
 //
-// pairing:  code ──pbkdf2──▶ slot id (what the relay sees)
-//           code ──pbkdf2──▶ envelope key (never leaves either screen)
+// pairing:  code ──scrypt──▶ slot id (what the relay sees)
+//           code ──scrypt──▶ envelope key (never leaves either screen)
+// names:    room key ──hkdf──▶ key for device names (the relay stores them sealed)
 // drops:    room key ──hkdf(drop id)──▶ per-drop AES-256-GCM key
 //           meta under a fixed IV, chunk i under IV = 0000‖u64(i)
 
-import { createCipheriv, createDecipheriv, hkdfSync, pbkdf2, randomBytes } from 'node:crypto';
-import { promisify } from 'node:util';
+import { createCipheriv, createDecipheriv, hkdfSync, randomBytes, scrypt } from 'node:crypto';
 
-const pbkdf2Async = promisify(pbkdf2);
+// memory-hard, so the 60-bit code can't be ground through on GPUs:
+// 32 MiB and ~80 ms per guess, for the relay operator as much as anyone
+const scryptAsync = (pw: string, salt: string, len: number) =>
+  new Promise<Buffer>((res, rej) => scrypt(pw, salt, len, { N: 2 ** 15, r: 8, p: 1, maxmem: 64 * 1024 * 1024 }, (e, k) => (e ? rej(e) : res(k))));
 
 export const CHUNK_SIZE = 4 * 1024 * 1024;
 const CROCKFORD = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
@@ -26,13 +29,15 @@ export function newRoomKey() {
   return randomBytes(32).toString('base64');
 }
 
-/** 8 Crockford characters, 40 bits */
+export const CODE_LENGTH = 12;
+
+/** 12 Crockford characters, 60 bits */
 export function newCode() {
-  const bytes = randomBytes(5);
+  const bytes = randomBytes(8);
   let bits = 0n;
   for (const b of bytes) bits = (bits << 8n) | BigInt(b);
   let out = '';
-  for (let i = 0; i < 8; i++) {
+  for (let i = 0; i < CODE_LENGTH; i++) {
     out = CROCKFORD[Number(bits & 31n)] + out;
     bits >>= 5n;
   }
@@ -47,19 +52,19 @@ export function normalizeCode(input: string): string | null {
     .replace(/O/g, '0')
     .replace(/[IL]/g, '1')
     .replace(/U/g, 'V');
-  if (s.length !== 8) return null;
+  if (s.length !== CODE_LENGTH) return null;
   for (const c of s) if (!CROCKFORD.includes(c)) return null;
   return s;
 }
 
 export function formatCode(code: string) {
-  return `${code.slice(0, 4)}-${code.slice(4)}`;
+  return `${code.slice(0, 4)}-${code.slice(4, 8)}-${code.slice(8)}`;
 }
 
 export async function pairSecrets(code: string) {
   const [slot, key] = await Promise.all([
-    pbkdf2Async(code, 'zack/pair-slot/v1', 150_000, 18, 'sha256'),
-    pbkdf2Async(code, 'zack/pair-key/v1', 150_000, 32, 'sha256'),
+    scryptAsync(code, 'zack/pair-slot/v2', 18),
+    scryptAsync(code, 'zack/pair-key/v2', 32),
   ]);
   return { slot: b64url(slot), key };
 }
@@ -112,4 +117,29 @@ export function sealChunk(key: Buffer, dropId: string, index: number, plain: Uin
 
 export function openChunk(key: Buffer, dropId: string, index: number, sealed: Uint8Array) {
   return open(key, chunkIv(index), sealed, `${dropId}:${index}`);
+}
+
+export function newSecret() {
+  return b64url(randomBytes(24));
+}
+
+function nameKey(roomKey: string) {
+  return Buffer.from(hkdfSync('sha256', Buffer.from(roomKey, 'base64'), Buffer.from('names'), 'zack/name/v1', 32));
+}
+
+/** A device name as the relay keeps it: sealed, base64url. */
+export function sealName(roomKey: string, name: string) {
+  const iv = randomBytes(12);
+  return 's1.' + b64url(Buffer.concat([iv, seal(nameKey(roomKey), iv, Buffer.from(name), 'zack/name')]));
+}
+
+/** Names from older clients are plain; sealed ones that don't open are shown as unknown. */
+export function openName(roomKey: string, stored: string) {
+  if (!stored.startsWith('s1.')) return stored;
+  try {
+    const raw = Buffer.from(stored.slice(3), 'base64url');
+    return open(nameKey(roomKey), raw.subarray(0, 12), raw.subarray(12), 'zack/name').toString('utf8').slice(0, 48);
+  } catch {
+    return '?';
+  }
 }

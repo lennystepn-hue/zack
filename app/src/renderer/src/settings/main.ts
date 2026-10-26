@@ -124,7 +124,9 @@ function keyLabel(k: string) {
 }
 
 function platformBadge(p: Device['platform']) {
-  return `<span class="os os-${p}">${p === 'mac' ? 'macOS' : p === 'win' ? 'Windows' : 'Linux'}</span>`;
+  // the platform comes from the relay: never put it into markup as is
+  const known = p === 'mac' || p === 'win' || p === 'linux' ? p : 'linux';
+  return `<span class="os os-${known}">${known === 'mac' ? 'macOS' : known === 'win' ? 'Windows' : 'Linux'}</span>`;
 }
 
 // ── skeleton ────────────────────────────────────────────────────────────────
@@ -256,7 +258,7 @@ function renderPair() {
         </button>
         <div class="choice join ${joinMode ? 'active' : ''}">
           <b>${esc(L.enter)}</b><small>${esc(L.enterHint)}</small>
-          <input id="joinInput" maxlength="9" spellcheck="false" autocomplete="off" placeholder="XXXX-XXXX" ${busy ? 'disabled' : ''} />
+          <input id="joinInput" maxlength="14" spellcheck="false" autocomplete="off" placeholder="XXXX-XXXX-XXXX" ${busy ? 'disabled' : ''} />
           <em class="err">${esc(joinError)}</em>
         </div>
       </div>`;
@@ -334,11 +336,11 @@ function onChange(e: Event) {
 async function onInput(e: Event) {
   const i = e.target as HTMLInputElement;
   if (i.id !== 'joinInput') return;
-  const raw = i.value.toUpperCase().replace(/[^0-9A-Z]/g, '').slice(0, 8);
-  i.value = raw.length > 4 ? `${raw.slice(0, 4)}-${raw.slice(4)}` : raw;
+  const raw = i.value.toUpperCase().replace(/[^0-9A-Z]/g, '').slice(0, 12);
+  i.value = raw.match(/.{1,4}/g)?.join('-') ?? '';
   joinError = '';
   i.parentElement!.querySelector('.err')!.textContent = '';
-  if (raw.length === 8) {
+  if (raw.length === 12) {
     busy = true;
     i.disabled = true;
     const r = await bridge.join(raw);
@@ -417,6 +419,12 @@ async function start() {
   const jump = (section: string) => document.getElementById(section)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   if (location.hash) jump(location.hash.slice(1));
   host?.onSection(jump);
+  // README screenshots: only with the browser mock, never in the app
+  const demo = new URLSearchParams(location.search);
+  if (!(window as unknown as { zack?: Bridge }).zack && demo.has('zoom')) document.documentElement.style.zoom = demo.get('zoom') ?? '1';
+  if (!(window as unknown as { zack?: Bridge }).zack && demo.has('demo-code')) {
+    setTimeout(() => (document.querySelector('[data-act=create]') as HTMLElement | null)?.click(), 200);
+  }
 }
 
 void start();

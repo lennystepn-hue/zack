@@ -2,7 +2,8 @@
 
 Two packages: `app/` (Electron 45 + electron-vite) and `worker/` (Cloudflare Worker relay: Durable Objects `Room`/`PairSlot`, R2 bucket `zack-portal-blobs`).
 
-- `app/src/core/` is the transport and crypto, free of Electron, so `node scripts/e2e-core.ts <relay>` and `node scripts/e2e-rekey.ts <relay>` test it directly. Run both after touching the protocol.
+- `app/src/core/` is the transport and crypto, free of Electron, so `node scripts/e2e-core.ts <relay>`, `e2e-rekey.ts` and `e2e-security.ts` test it directly. Run all three after touching the protocol or the relay.
+- Each device binds its id on the relay with a secret (`dev.` subprotocol); names are sealed (`s1.` prefix). Pairing codes are 12 Crockford chars through scrypt; changing that breaks pairing with older versions.
 - `app/src/main/` is the Electron glue, `app/src/renderer/src/themes/` holds the six looks on a shared `Theme` base (`base.ts`).
 - Electron 45's `clipboard` is async and W3C-shaped (`read()`, `write([ClipboardItem])`); there is no `readImage`/`writeImage`.
 - Visual work: `npm run stage` in `app/` serves the renderer with a mock bridge at `localhost:5199/stage.html` (`?view=solo&theme=…`).

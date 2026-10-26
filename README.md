@@ -20,7 +20,7 @@
 
 Zack is a small widget that sits on your desktop. Drag a photo, a PDF, a whole folder or a bit of text onto it, and it gets pulled in and comes out again on your other computer: the photo is on that machine's clipboard, the file is in `Downloads/Zack`, the text is ready to paste. Mac to Windows, Windows to Mac, Mac to Mac, Linux to anything, and as many machines in one portal as you like.
 
-No account, no cloud drive, no cable. Two computers link up once with an eight-character code, and from then on everything that crosses is end-to-end encrypted.
+No account, no cloud drive, no cable. Two computers link up once with a twelve-character code, and from then on everything that crosses is end-to-end encrypted.
 
 ## Six ways to look at it
 
@@ -58,13 +58,13 @@ The builds are not code-signed yet, so the first launch needs one extra click. O
 
 <img src="docs/media/settings-pairing.png" alt="Settings window showing a pairing code" width="300" align="right">
 
-1. On the first computer, Zack opens its settings by itself. Click **Open a new portal** and you get a code like `HRQW-C8M2`.
+1. On the first computer, Zack opens its settings by itself. Click **Open a new portal** and you get a code like `K7QM-2XRA-9PDF`.
 2. On the second computer, choose **Enter a code** and type it in, in any case, with or without the dash.
 3. Both portals light up. That's it.
 
 The code works exactly once and expires after ten minutes. Add a third or fourth machine the same way with **Add a device**. Removing a device in the settings gives everyone else a new key on the spot, so whatever the removed one kept is useless.
 
-The app speaks English and German, following your system or the choice in the settings (the screenshots here are in German).
+The app speaks English and German, following your system or the choice in the settings.
 
 <br clear="right">
 
@@ -97,16 +97,21 @@ A small relay on Cloudflare passes things along: a Worker, one Durable Object pe
 
 ## Privacy and security
 
-- **End-to-end encrypted.** Everything is sealed on your computer with AES-256-GCM before it leaves, with a fresh key for every drop. File names, previews and texts are sealed too. The relay only ever sees encrypted bytes, their size and when they moved. The chunk count is sealed as well, so the relay can't cut a file short unnoticed.
-- **Nothing is kept.** The encrypted chunks are deleted the moment the last recipient has them, typically within a second. Only a drop for a computer that is offline waits, for at most a day (texts up to 30 days), and a cleanup rule removes anything orphaned after two days.
-- **Pairing without trusting the server.** The relay sees a slow hash of the code, never the code. The portal key travels inside an envelope sealed with a second derivation of it, and pairing is rate-limited.
-- **Removed means removed.** Removing a device rotates the portal: the others move to a new room with a new key, handed over encrypted under the old one.
-- **Safe on arrival.** Files from the other side are never opened automatically, a click on a program only shows it in its folder, folder archives can't write outside their target, and incoming file names are cleaned up.
-- **A locked-down app.** Sandboxed renderers with context isolation, a strict content security policy, every message to the app's core checked for where it came from, no navigation, no pop-up windows. Portal keys live in the system keychain where one is available.
+- **End-to-end encrypted.** Everything is sealed on your computer with AES-256-GCM before it leaves, with a fresh key for every drop. File names, previews, texts and the names of your computers are sealed too. The relay sees encrypted bytes, their sizes and timing, device ids, platforms and IP addresses, but not what you send or what your computers are called. The chunk count and each chunk's position are sealed as well, so the relay can't cut a file short, reorder or swap pieces unnoticed, and a replayed drop is recognised and ignored.
+- **Pairing.** The twelve-character code (60 bits) is stretched with scrypt, 32 MB of memory per guess, into two independent values: one names a one-shot mailbox on the relay, the other seals the portal key inside it. Even whoever runs the relay would need on the order of 2⁶⁰ of those guesses to open the envelope. The code works once and expires after ten minutes.
+- **Every device has its own secret.** A computer proves itself to the relay with a secret only it holds, so nobody can connect in its name, not even someone who has the portal's key.
+- **Removed means removed.** Removing a device kicks it out, bars it from the portal for good, closes the old portal to newcomers and moves everyone else to a fresh room with a new key. A computer only follows such a move when it comes from a current member of the portal and stays on the same relay. What this can't cover is a removed device working together with whoever runs the relay; if that worries you, run your own.
+- **Safe on arrival.** Nothing received is opened by itself. A click opens documents, images, audio and video; programs, scripts, installers, macro documents and anything unusual are only shown in their folder. Received files carry the system's "downloaded from the internet" mark, so Gatekeeper and SmartScreen check them before they run. File names lose invisible direction tricks, folder archives can neither write nor link outside their folder, and their size and number of entries are capped.
+- **A locked-down app.** Sandboxed renderers with context isolation and a strict content security policy, every message to the app's core checked for where it came from, no navigation, no pop-up windows. Release builds can't be turned into a Node runtime or have a debugger attached (Electron fuses), development switches are ignored, and portal keys live in the system keychain.
+- **Checkable releases.** Every release lists the SHA-256 checksum of each file (`shasum -a 256 -c SHA256SUMS.txt`). Builds run on GitHub Actions with read-only permissions and pinned actions.
+
+The security model was reviewed and the attacks from that review are part of the test suite (`app/scripts/e2e-security.ts`).
 
 ## Costs and limits
 
-For personal use the relay runs inside Cloudflare's free tier: Workers and Durable Objects include 100,000 requests a day, R2 includes 10 GB of storage, and downloads from R2 cost nothing. A 1 GB video is about 500 requests. Because the relay is public by design, it accepts at most **10 GB of uploads per day** in total, rate-limits every address, and expires everything within two days.
+For personal use the relay runs inside Cloudflare's free tier: Workers and Durable Objects include 100,000 requests a day, R2 includes 10 GB of storage and millions of operations a month, and downloads from R2 cost nothing. A 1 GB video is about 500 requests.
+
+The relay is public by design, so each day it accepts at most 10 GB of uploads (every chunk counts as at least 512 KB), 300,000 chunk downloads and 200 MB of small drops such as texts. It only stores chunks of drops that were announced, cuts off connections that flood it, and rate-limits each address. Someone determined could use up a day's allowance, and transfers would then wait until midnight UTC, but R2 stays inside the free tier whatever happens.
 
 ## Run your own relay
 
@@ -122,7 +127,7 @@ cd ../app && npm install
 ZACK_SERVER=https://<your-worker>.workers.dev npm run dist:mac
 ```
 
-`DAILY_UPLOAD_GB` in `worker/wrangler.jsonc` sets the daily cap.
+`DAILY_UPLOAD_GB` and `DAILY_DOWNLOADS` in `worker/wrangler.jsonc` set the daily budgets.
 
 ## Develop
 
@@ -134,6 +139,7 @@ npm run dev:b                                   # a second instance with its own
 npm run stage                                   # every look in a browser with a fake other side: localhost:5199/stage.html
 node scripts/e2e-core.ts [relay]                # end-to-end test: pairing, transfers, offline delivery
 node scripts/e2e-rekey.ts [relay]               # removing a device locks it out
+node scripts/e2e-security.ts [relay]            # the attacks from the security review, each of which must fail
 ```
 
 The app is Electron with electron-vite. `app/src/core` holds the transport and the crypto without any Electron in it, which is why the end-to-end tests run in plain Node. The looks live in `app/src/renderer/src/themes`, on a shared base that gives each of them the same beats (take in, emerge, present, dock) and leaves the drawing to them.
@@ -148,7 +154,7 @@ Raise the version in `app/package.json`, then push a tag:
 git tag v0.2.0 && git push origin v0.2.0
 ```
 
-GitHub Actions builds macOS, Windows and Linux natively and publishes the release with all installers.
+GitHub Actions builds macOS, Windows and Linux natively and publishes the release with all installers and their checksums.
 
 ## License
 

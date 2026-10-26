@@ -6,7 +6,7 @@ import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createRoom, publishPairing, redeemPairing, PortalClient, type Announce } from '../src/core/client.ts';
-import { formatCode, newId } from '../src/core/crypto.ts';
+import { formatCode, newId, newSecret } from '../src/core/crypto.ts';
 
 const server = process.argv[2] ?? 'http://127.0.0.1:8787';
 const dir = await mkdtemp(join(tmpdir(), 'zack-e2e-'));
@@ -33,7 +33,7 @@ console.log(`relay ${server}`);
 const room = await createRoom(server);
 ok(`room ${room.roomId.slice(0, 6)}…`);
 
-const mac = new PortalClient(room, { id: newId(), name: 'Studio Mac', platform: 'mac' });
+const mac = new PortalClient(room, { id: newId(), name: 'Studio Mac', platform: 'mac', secret: newSecret() });
 mac.start();
 await until(mac, 'connection', (v) => (v ? true : undefined));
 ok('mac online');
@@ -52,8 +52,9 @@ try {
 }
 
 const winId = newId();
+const winSecret = newSecret();
 const joined = until(mac, 'joined', (d) => d);
-const win = new PortalClient(payload.room, { id: winId, name: 'Gaming PC', platform: 'win' });
+const win = new PortalClient(payload.room, { id: winId, name: 'Gaming PC', platform: 'win', secret: winSecret });
 win.start();
 const joinedDev = await joined;
 if (joinedDev.id !== winId) fail('joined event for wrong device');
@@ -101,7 +102,7 @@ await until(mac, 'presence', (devs) => (devs.some((d: any) => d.id === winId && 
 ok('pc went offline');
 const offline = await mac.sendText('https://example.com/while-you-were-away', 'link', null);
 if (offline.online !== 0 || offline.recipients !== 1) fail('expected 0 online / 1 recipient');
-const win2 = new PortalClient(payload.room, { id: winId, name: 'Gaming PC', platform: 'win' });
+const win2 = new PortalClient(payload.room, { id: winId, name: 'Gaming PC', platform: 'win', secret: winSecret });
 const backlog = until<Announce>(win2, 'announce', (a) => (a.id === offline.id ? a : undefined));
 win2.start();
 const a3 = await backlog;
@@ -109,7 +110,7 @@ ok(`backlog delivered on reconnect: ${a3.meta.text}`);
 win2.ack(a3.id);
 
 // wrong key can't read
-const evil = new PortalClient({ ...room, key: randomBytes(32).toString('base64') }, { id: newId(), name: 'x', platform: 'linux' });
+const evil = new PortalClient({ ...room, key: randomBytes(32).toString('base64') }, { id: newId(), name: 'x', platform: 'linux', secret: newSecret() });
 let evilSaw = false;
 evil.on('announce', () => (evilSaw = true));
 evil.start();

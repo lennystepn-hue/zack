@@ -20,12 +20,22 @@ import { formatCode, newId } from '../core/crypto';
 import { formatBytes, pickLang, strings } from '../shared/i18n';
 import type { DroppedBuffer, Lang, PairCode, PortalEvent, PortalItem, PortalState, Settings } from '../shared/types';
 import { copyImageFile, copyText, readClipboard } from './clipboard';
-import { isDir, kindOf, mimeOf, safeName, thumbnailFor, uniquePath, unzipInto, zipFolder } from './files';
+import { isDir, isImageFile, kindOf, markFromInternet, mimeOf, safeName, thumbnailFor, uniquePath, unzipInto, zipFolder } from './files';
 import { platform, Store } from './store';
 
 const INLINE_LIMIT = 200_000;
 const HISTORY_TEXT = 50_000;
-const RISKY = new Set(['.exe', '.msi', '.bat', '.cmd', '.com', '.scr', '.ps1', '.vbs', '.js', '.jar', '.app', '.command', '.sh', '.pkg', '.dmg', '.appimage', '.deb', '.run', '.lnk', '.reg']);
+// One click opens documents and media. Anything else that came over the wire
+// (programs, scripts, installers, macro documents, shortcuts…) is only shown
+// in its folder, so opening it is a deliberate second step.
+const SAFE_OPEN = new Set([
+  '.png', '.jpg', '.jpeg', '.gif', '.webp', '.heic', '.heif', '.bmp', '.tif', '.tiff', '.avif',
+  '.mp4', '.mov', '.m4v', '.mkv', '.webm', '.avi', '.mp3', '.m4a', '.wav', '.aif', '.aiff', '.flac', '.ogg', '.aac',
+  '.pdf', '.txt', '.md', '.rtf', '.csv', '.docx', '.xlsx', '.pptx', '.odt', '.ods', '.odp', '.pages', '.numbers', '.key',
+]);
+const BUNDLE = /\.(app|bundle|framework|plugin|kext|prefpane|service|workflow|action|pkg|mpkg|appex)$/i;
+const TEXT_TO_CLIPBOARD_MAX = 5 * 1024 * 1024;
+const DROP_ID = /^[A-Za-z0-9_-]{16,64}$/;
 const STALL = 90_000;
 
 type Origin = 'drop' | 'clipboard';
@@ -47,7 +57,9 @@ export class PortalService extends EventEmitter<Events> {
   private running = 0;
   private waitingJobs: (() => void)[] = [];
   private aborts = new Map<string, AbortController>();
-  private tmp = join(app.getPath('temp'), 'zack');
+  // staging stays in our own profile folder, not in a shared /tmp
+  private tmp = join(app.getPath('userData'), 'staging');
+  private rekeying = false;
   private lastProgress = new Map<string, number>();
 
   get lang(): Lang {
@@ -80,7 +92,7 @@ export class PortalService extends EventEmitter<Events> {
       this.client.removeAllListeners();
       this.client.stop();
     }
-    const c = new PortalClient(room, { id: this.store.deviceId, name: this.store.deviceName, platform });
+    const c = new PortalClient(room, { id: this.store.deviceId, name: this.store.deviceName, platform, secret: this.store.deviceSecret });
     this.client = c;
 
     c.on('connection', () => this.pushState());
@@ -321,7 +333,7 @@ export class PortalService extends EventEmitter<Events> {
     const packShare = folder ? 0.15 : 0;
     try {
       if (folder) {
-        await mkdir(this.tmp, { recursive: true });
+        await mkdir(this.tmp, { recursive: true, mode: 0o700 });
         src = cleanup = join(this.tmp, `${item.id}.zip`);
         await zipFolder(item.path, src, (p) => this.progressOut(item.id, p * packShare));
         if (abort.signal.aborted) throw new PortalError('cancelled');
@@ -376,9 +388,9 @@ export class PortalService extends EventEmitter<Events> {
         if (size <= INLINE_LIMIT) {
           await c.sendText(body, kind, this.targets(), item.id);
         } else {
-          await mkdir(this.tmp, { recursive: true });
+          await mkdir(this.tmp, { recursive: true, mode: 0o700 });
           const file = join(this.tmp, `${item.id}.txt`);
-          await writeFile(file, body);
+          await writeFile(file, body, { flag: 'wx', mode: 0o600 });
           await c.sendFile(file, { kind: 'text', name: 'Text.txt', mime: 'text/plain' }, this.targets(), (p) => this.progressOut(item.id, p), item.id);
           await rm(file, { force: true });
         }
@@ -395,11 +407,11 @@ export class PortalService extends EventEmitter<Events> {
 
   async dropBuffers(buffers: DroppedBuffer[]) {
     if (!this.ensureReady()) return;
-    await mkdir(this.tmp, { recursive: true });
+    await mkdir(this.tmp, { recursive: true, mode: 0o700 });
     const paths: string[] = [];
     for (const b of buffers) {
       const p = await uniquePath(this.tmp, safeName(b.name, 'Dropped'));
-      await writeFile(p, Buffer.from(b.data));
+      await writeFile(p, Buffer.from(b.data), { flag: 'wx', mode: 0o600 });
       paths.push(p);
     }
     await this.dropPaths(paths);
@@ -411,10 +423,10 @@ export class PortalService extends EventEmitter<Events> {
     if (clip.files.length) return this.dropPaths(clip.files, 'clipboard');
     if (clip.text.trim()) return this.dropText(clip.text, 'clipboard');
     if (clip.image) {
-      await mkdir(this.tmp, { recursive: true });
+      await mkdir(this.tmp, { recursive: true, mode: 0o700 });
       const stamp = new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-');
       const p = join(this.tmp, `Clipboard ${stamp}.png`);
-      await writeFile(p, clip.image);
+      await writeFile(p, clip.image, { flag: 'wx', mode: 0o600 });
       return this.dropPaths([p], 'clipboard');
     }
     this.send({ type: 'notice', text: this.t.nothingOnClipboard });
@@ -447,18 +459,25 @@ export class PortalService extends EventEmitter<Events> {
     if (a.meta.control?.type === 'rekey') {
       c.ack(a.id);
       const room = a.meta.control.room;
+      // only a device that is in this portal right now may move us, and only to a room on the same relay
+      const member = a.from !== this.store.deviceId && c.devices.some((d) => d.id === a.from);
+      const sane =
+        !!room && room.server === c.room.server && DROP_ID.test(String(room.roomId)) && typeof room.token === 'string' && typeof room.key === 'string';
+      if (!member || !sane || this.rekeying) return;
+      this.rekeying = true;
       setTimeout(() => {
         this.store.setRoom(room);
         this.connect(room);
+        this.rekeying = false;
       }, 250);
       return;
     }
 
+    // a drop seen before (a replay, or one re-sent after reconnecting) is acknowledged, not shown again
     const known = this.store.item(a.id);
-    if (known && (known.status === 'received' || known.dir === 'out')) return c.ack(a.id);
+    if (this.store.wasSeen(a.id) || (known && (known.status === 'received' || known.dir === 'out'))) return c.ack(a.id);
     if (this.incoming.has(a.id)) return;
 
-    const sender = c.devices.find((d) => d.id === a.from);
     const item: PortalItem = {
       id: a.id,
       dir: 'in',
@@ -468,7 +487,8 @@ export class PortalService extends EventEmitter<Events> {
       mime: a.meta.mime,
       text: a.meta.text?.slice(0, HISTORY_TEXT),
       thumb: a.meta.thumb,
-      peer: sender?.name ?? a.meta.from.name,
+      // the sender's name as sealed in the drop, not what the relay says
+      peer: a.meta.from.name,
       peerPlatform: a.meta.from.platform,
       at: Date.now(),
       status: 'incoming',
@@ -492,6 +512,7 @@ export class PortalService extends EventEmitter<Events> {
       item.copied = true;
     }
     if (item.kind === 'link' && s.autoOpenLinks && /^https?:\/\//i.test(text)) void shell.openExternal(text);
+    this.store.markSeen(item.id);
     item.status = 'received';
     item.progress = 1;
     this.store.upsertItem(item);
@@ -530,17 +551,20 @@ export class PortalService extends EventEmitter<Events> {
       } else {
         path = await uniquePath(s.saveDir, safeName(a.meta.name));
         await rename(tmp, path);
+        await markFromInternet(path);
       }
+      this.store.markSeen(id);
 
       let copied = false;
       let text: string | undefined;
-      if (a.meta.kind === 'text') {
+      if (a.meta.kind === 'text' && a.size <= TEXT_TO_CLIPBOARD_MAX) {
         text = await readFile(path, 'utf8');
         if (s.autoCopyText) {
           await copyText(text);
           copied = true;
         }
-      } else if (a.meta.kind === 'image' && s.autoCopyImages) {
+      } else if (a.meta.kind === 'image' && s.autoCopyImages && (await isImageFile(path))) {
+        // only real, reasonably sized images get decoded without a click
         copied = await copyImageFile(path);
       }
 
@@ -577,7 +601,10 @@ export class PortalService extends EventEmitter<Events> {
     if (item.kind === 'text') return void this.copyItem(id);
     if (!item.path || !existsSync(item.path)) return;
     // one click should never run something that came over the wire
-    if (item.dir === 'in' && RISKY.has(extname(item.path).toLowerCase())) return shell.showItemInFolder(item.path);
+    if (item.dir === 'in') {
+      const safe = item.kind === 'folder' ? !BUNDLE.test(item.path) : SAFE_OPEN.has(extname(item.path).toLowerCase());
+      if (!safe) return shell.showItemInFolder(item.path);
+    }
     void shell.openPath(item.path);
   }
 

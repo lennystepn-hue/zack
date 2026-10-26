@@ -9,6 +9,8 @@ export default defineConfig({
   build: {
     outDir: resolve(__dirname, 'media-build'),
     emptyOutDir: true,
-    rollupOptions: { input: { reel: resolve(__dirname, 'src/renderer/reel.html') } },
+    rollupOptions: {
+      input: { reel: resolve(__dirname, 'src/renderer/reel.html'), settings: resolve(__dirname, 'src/renderer/settings.html') },
+    },
   },
 });

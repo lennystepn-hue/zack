@@ -8,7 +8,10 @@ import { Windows } from './windows';
 
 // Separate profiles let two instances run side by side on one machine,
 // which is how the whole round trip gets tested without a second computer.
-const profile = process.env.ZACK_PROFILE;
+// Development hooks (second profile, screenshots, dev server) exist only in
+// unpackaged builds; a release ignores the environment.
+const dev = !app.isPackaged;
+const profile = dev && /^[a-z0-9]{1,16}$/i.test(process.env.ZACK_PROFILE ?? '') ? process.env.ZACK_PROFILE : undefined;
 if (profile) app.setPath('userData', join(app.getPath('appData'), `Zack-${profile}`));
 if (process.platform === 'linux') app.commandLine.appendSwitch('enable-transparent-visuals');
 app.setAppUserModelId('services.lenny.zack');
@@ -53,7 +56,7 @@ async function boot() {
   powerMonitor.on('resume', () => s.nudge());
   powerMonitor.on('unlock-screen', () => s.nudge());
 
-  if (process.env.ZACK_CAPTURE) scheduleCaptures(process.env.ZACK_CAPTURE);
+  if (dev && process.env.ZACK_CAPTURE) scheduleCaptures(process.env.ZACK_CAPTURE);
 }
 
 function applySettings(next: Settings, patch: Partial<Settings>) {
@@ -73,8 +76,8 @@ function applySettings(next: Settings, patch: Partial<Settings>) {
 // Only our own pages get to talk to the main process.
 function trusted(e: IpcMainEvent | IpcMainInvokeEvent) {
   const url = e.senderFrame?.url ?? '';
-  const dev = process.env.ELECTRON_RENDERER_URL;
-  if (dev && url.startsWith(dev)) return true;
+  const server = dev ? process.env.ELECTRON_RENDERER_URL : undefined;
+  if (server && url.startsWith(server)) return true;
   return url.startsWith(pathToFileURL(join(__dirname, '../renderer')).href);
 }
 
@@ -207,7 +210,9 @@ function scheduleCaptures(dir: string) {
     await writeFile(join(dir, `${name}-${profile ?? 'main'}.png`), img.toPNG());
   };
   setTimeout(() => void shoot('widget'), 4000);
-  ipcMain.on('portal:capture', (_e, name: unknown) => void shoot(typeof name === 'string' ? name.replace(/[^a-z0-9-]/gi, '') : 'shot'));
+  ipcMain.on('portal:capture', (e, name: unknown) => {
+    if (trusted(e)) void shoot(typeof name === 'string' ? name.replace(/[^a-z0-9-]/gi, '') : 'shot');
+  });
 }
 
 app.on('window-all-closed', () => {

@@ -4,11 +4,13 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from '
 import { hostname } from 'node:os';
 import { join } from 'node:path';
 import type { RoomCreds } from '../core/client';
-import { newId } from '../core/crypto';
+import { newId, newSecret } from '../core/crypto';
 import type { Platform, PortalItem, Settings } from '../shared/types';
 
 interface Persisted {
   deviceId: string;
+  /** proves to the relay that this device id is ours */
+  deviceSecret: string;
   deviceName: string;
   settings: Settings;
   widget?: { x: number; y: number };
@@ -65,6 +67,8 @@ export class Store {
   private dir = app.getPath('userData');
   private file = join(this.dir, 'config.json');
   private historyFile = join(this.dir, 'history.json');
+  private seenFile = join(this.dir, 'seen.json');
+  private seen = new Set<string>();
   private data: Persisted;
   history: PortalItem[] = [];
   room: RoomCreds | null = null;
@@ -75,6 +79,7 @@ export class Store {
     const loaded = readJson<Partial<Persisted>>(this.file) ?? {};
     this.data = {
       deviceId: loaded.deviceId ?? newId(),
+      deviceSecret: loaded.deviceSecret ?? newSecret(),
       deviceName: loaded.deviceName ?? defaultName(),
       settings: { ...defaultSettings(), ...loaded.settings },
       widget: loaded.widget,
@@ -82,6 +87,7 @@ export class Store {
       server: loaded.server,
     };
     this.room = this.unsealRoom();
+    this.seen = new Set(readJson<string[]>(this.seenFile) ?? []);
     this.history = (readJson<PortalItem[]>(this.historyFile) ?? []).map((i) =>
       i.status === 'sending' || i.status === 'incoming' ? { ...i, status: 'failed' as const } : i,
     );
@@ -90,6 +96,9 @@ export class Store {
 
   get deviceId() {
     return this.data.deviceId;
+  }
+  get deviceSecret() {
+    return this.data.deviceSecret;
   }
   get deviceName() {
     return this.data.deviceName;
@@ -114,7 +123,8 @@ export class Store {
     this.save();
   }
   get server() {
-    return process.env.ZACK_SERVER ?? this.data.server ?? __ZACK_SERVER__;
+    // an environment variable may point a development build elsewhere, never a release
+    return (!app.isPackaged && process.env.ZACK_SERVER) || this.data.server || __ZACK_SERVER__;
   }
 
   setRoom(room: RoomCreds | null) {
@@ -157,6 +167,17 @@ export class Store {
     this.save();
   }
 
+  /** Every drop ever received, so a replayed one is never delivered twice. */
+  wasSeen(id: string) {
+    return this.seen.has(id);
+  }
+
+  markSeen(id: string) {
+    this.seen.add(id);
+    if (this.seen.size > 5000) this.seen = new Set([...this.seen].slice(-4000));
+    this.save();
+  }
+
   item(id: string) {
     return this.history.find((h) => h.id === id) ?? null;
   }
@@ -171,6 +192,7 @@ export class Store {
     this.saveTimer = null;
     writeAtomic(this.file, JSON.stringify(this.data, null, 2));
     writeAtomic(this.historyFile, JSON.stringify(this.history));
+    writeAtomic(this.seenFile, JSON.stringify([...this.seen]));
   }
 }
 

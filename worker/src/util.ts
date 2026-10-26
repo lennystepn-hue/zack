@@ -24,11 +24,10 @@ export function safeEqual(a: string, b: string) {
   return crypto.subtle.timingSafeEqual(x, y);
 }
 
-export async function deletePrefix(bucket: R2Bucket, prefix: string) {
-  let cursor: string | undefined;
-  do {
-    const page = await bucket.list({ prefix, cursor, limit: 1000 });
-    if (page.objects.length) await bucket.delete(page.objects.map((o) => o.key));
-    cursor = page.truncated ? page.cursor : undefined;
-  } while (cursor);
+/** Deletes chunk 0…count-1 under prefix. By name, not by listing: R2 deletes are free, lists are billed. */
+export async function deleteChunks(bucket: R2Bucket, prefix: string, count: number) {
+  for (let start = 0; start < count; start += 1000) {
+    const keys = Array.from({ length: Math.min(1000, count - start) }, (_, i) => prefix + (start + i));
+    await bucket.delete(keys);
+  }
 }

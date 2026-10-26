@@ -31,7 +31,7 @@ function lockDown(win: BrowserWindow) {
     return { action: 'deny' };
   });
   win.webContents.on('will-navigate', (e, url) => {
-    const dev = process.env.ELECTRON_RENDERER_URL;
+    const dev = app.isPackaged ? undefined : process.env.ELECTRON_RENDERER_URL;
     if (dev && url.startsWith(dev)) return;
     e.preventDefault();
   });

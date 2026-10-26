@@ -13,6 +13,17 @@ files:
 asarUnpack:
   - resources/**
 
+# A release can't be turned into a Node runtime or debugged from outside:
+# no ELECTRON_RUN_AS_NODE, no NODE_OPTIONS, no --inspect, app code only from
+# the checked asar.
+electronFuses:
+  runAsNode: false
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  enableEmbeddedAsarIntegrityValidation: true
+  onlyLoadAppFromAsar: true
+  enableCookieEncryption: true
+
 mac:
   category: public.app-category.productivity
   icon: build/icon.png
@@ -21,6 +32,8 @@ mac:
   hardenedRuntime: false
   extendInfo:
     LSUIElement: true
+    # files Zack writes get the quarantine flag, so Gatekeeper checks them on first open
+    LSFileQuarantineEnabled: true
   target:
     - target: dmg
       arch: [arm64, x64]
