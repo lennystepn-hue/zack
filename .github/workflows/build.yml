@@ -44,3 +44,21 @@ jobs:
             app/dist/*.AppImage
             app/dist/*.tar.gz
           if-no-files-found: error
+
+  # a v* tag turns the three builds into a GitHub Release
+  release:
+    needs: app
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - run: ls -la artifacts
+      - run: gh release create "$GITHUB_REF_NAME" artifacts/* --title "Zack ${GITHUB_REF_NAME#v}" --notes-file .github/release-notes.md
+        env:
+          GH_TOKEN: ${{ github.token }}

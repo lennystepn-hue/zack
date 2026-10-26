@@ -41,12 +41,15 @@ nsis:
   createDesktopShortcut: true
   shortcutName: Zack
   artifactName: Zack-${version}-win-setup.${ext}
+portable:
+  artifactName: Zack-${version}-win-portable.${ext}
 
 linux:
   icon: build/icon.png
   category: Utility
   maintainer: Lenny Enderle
   synopsis: A portal between your computers
+  artifactName: Zack-${version}-linux-${arch}.${ext}
   target:
     - target: AppImage
       arch: [x64]
