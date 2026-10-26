@@ -7,3 +7,4 @@ worker/.wrangler/
 .env*
 *.log
 .DS_Store
+app/media-build/

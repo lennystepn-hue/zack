@@ -223,7 +223,9 @@ body {
   transform: none;
 }
 
-.captioned .status {
+/* the caption wins over the status line, even one with something to say */
+.zw.captioned .status,
+.zw.captioned.status-on .status {
   opacity: 0;
   transform: translateY(-5px);
   pointer-events: none;

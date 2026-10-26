@@ -5,7 +5,7 @@ import type { Bridge, Device, PortalEvent, PortalItem, PortalState, Settings } f
 
 type Listener = (e: PortalEvent) => void;
 
-function photo(seed: number) {
+export function photo(seed: number) {
   const c = document.createElement('canvas');
   c.width = 320;
   c.height = 220;
