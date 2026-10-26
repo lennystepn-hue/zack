@@ -10,4 +10,5 @@ Two packages: `app/` (Electron 45 + electron-vite) and `worker/` (Cloudflare Wor
 - Two real instances on one machine: `ZACK_PROFILE=a` / `ZACK_PROFILE=b`, `--remote-debugging-port` to drive them over CDP.
 - The relay caps total uploads per UTC day (`DAILY_UPLOAD_GB` in `wrangler.jsonc`, counted in the `Quota` Durable Object); the app shows `daily_limit` when it's hit.
 - Deploying the worker (`npx wrangler deploy`) changes a live service: get the user's go first. `ROOM_SECRET` is a Worker secret, never in the repo.
+- Self-update (`app/src/main/updater.ts`) reads the latest GitHub release and needs the asset names `Zack-<v>-mac-<arch>.dmg`, `-win-setup.exe`, `-linux-x64.AppImage` plus `SHA256SUMS.txt`; renaming them breaks updates for everyone already installed. Test it with a packaged copy built as an older version (`electron-builder --mac dir --arm64 -c.extraMetadata.version=0.1.9`) started with `--user-data-dir=<tmp>`, so the real profile and keychain stay out of it.
 - Windows installers and the AppImage need x86 tools: build them with `.github/workflows/build.yml`, not on an Apple Silicon Mac. Locally `dist:win` makes a zip.

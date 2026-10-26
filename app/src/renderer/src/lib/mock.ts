@@ -76,9 +76,14 @@ export function mockBridge(opts: MockOptions = {}): Bridge & { demo: Demo } {
     settings,
     history: [],
     server: 'https://zack-portal.example.workers.dev',
-    version: 'preview',
+    version: '0.2.1',
+    update: { phase: 'idle' },
   };
   const emit = (e: PortalEvent) => listeners.forEach((l) => l(e));
+  const update = (u: PortalState['update']) => {
+    state.update = u;
+    emit({ type: 'update', update: u });
+  };
   const push = () => emit({ type: 'state', state: structuredClone(state) });
   let n = 0;
 
@@ -209,6 +214,20 @@ export function mockBridge(opts: MockOptions = {}): Bridge & { demo: Demo } {
     openSaveDir: () => {},
     moveStart: () => {},
     moveEnd: () => {},
+    checkUpdate: async () => {
+      update({ phase: 'checking' });
+      setTimeout(() => update({ phase: 'available', version: '0.3.0', auto: true }), 900);
+    },
+    installUpdate: async () => {
+      let progress = 0;
+      const tick = setInterval(() => {
+        progress = Math.min(100, progress + 7);
+        update({ phase: 'downloading', version: '0.3.0', progress });
+        if (progress < 100) return;
+        clearInterval(tick);
+        update({ phase: 'installing', version: '0.3.0' });
+      }, 120);
+    },
   };
   return bridge;
 }

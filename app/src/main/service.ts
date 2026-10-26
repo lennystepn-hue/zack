@@ -18,7 +18,7 @@ import {
 } from '../core/client';
 import { formatCode, newId } from '../core/crypto';
 import { formatBytes, pickLang, strings } from '../shared/i18n';
-import type { DroppedBuffer, Lang, PairCode, PortalEvent, PortalItem, PortalState, Settings } from '../shared/types';
+import type { DroppedBuffer, Lang, PairCode, PortalEvent, PortalItem, PortalState, Settings, UpdateState } from '../shared/types';
 import { copyImageFile, copyText, readClipboard } from './clipboard';
 import { isDir, isImageFile, kindOf, markFromInternet, mimeOf, safeName, thumbnailFor, uniquePath, unzipInto, zipFolder } from './files';
 import { platform, Store } from './store';
@@ -156,7 +156,15 @@ export class PortalService extends EventEmitter<Events> {
       history: this.store.history,
       server: this.store.room?.server ?? this.store.server,
       version: app.getVersion(),
+      update: this.updateState(),
     };
+  }
+
+  /** set by the app once the updater exists */
+  updateState: () => UpdateState = () => ({ phase: 'idle' });
+
+  announceUpdate(update: UpdateState) {
+    this.send({ type: 'update', update });
   }
 
   private pushState() {

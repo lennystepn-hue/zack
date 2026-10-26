@@ -65,7 +65,16 @@ export interface PortalState {
   history: PortalItem[];
   server: string;
   version: string;
+  update: UpdateState;
 }
+
+export type UpdateState =
+  | { phase: 'idle' | 'checking' | 'current' }
+  /** auto: this copy can install it itself; otherwise the download page opens */
+  | { phase: 'available'; version: string; auto: boolean }
+  | { phase: 'downloading'; version: string; progress: number }
+  | { phase: 'installing'; version: string }
+  | { phase: 'error'; error: 'network' | 'checksum' | 'install' };
 
 export interface PairCode {
   code: string;
@@ -83,7 +92,8 @@ export type PortalEvent =
   | { type: 'linked'; device: Device }
   | { type: 'pair-code'; code: PairCode | null }
   | { type: 'theme'; theme: ThemeId }
-  | { type: 'notice'; text: string };
+  | { type: 'notice'; text: string }
+  | { type: 'update'; update: UpdateState };
 
 export interface DroppedBuffer {
   name: string;
@@ -119,6 +129,8 @@ export interface Bridge {
   hideWidget(): void;
   openSaveDir(): void;
   itemMenu(id: string): void;
+  checkUpdate(): Promise<void>;
+  installUpdate(): Promise<void>;
   /** the widget follows the cursor between these two calls */
   moveStart(): void;
   moveEnd(): void;

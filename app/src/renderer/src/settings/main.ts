@@ -53,6 +53,18 @@ const T = {
     relay: 'Relay',
     leave: 'Portal auf diesem Gerät verlassen',
     leaveConfirm: 'Dieses Gerät aus dem Portal entfernen?',
+    updates: 'Updates',
+    checkUpdate: 'Nach Updates suchen',
+    checking: 'Suche…',
+    upToDate: 'Das ist die neueste Version.',
+    updateReady: (v: string) => `Version ${v} ist da.`,
+    updateManual: (v: string) => `Version ${v} ist da. Diese Installation kann sich nicht selbst ersetzen, lade sie herunter.`,
+    updateNow: 'Jetzt aktualisieren',
+    download: 'Herunterladen',
+    downloading: (p: number) => `Lädt… ${p} %`,
+    installing: 'Wird installiert, Zack startet gleich neu…',
+    tryAgain: 'Nochmal',
+    updateErrors: { network: 'GitHub ist gerade nicht erreichbar.', checksum: 'Die Prüfsumme passt nicht, das Update wurde verworfen.', install: 'Installieren hat nicht geklappt.' } as Record<string, string>,
     errors: { bad_code: 'Das ist kein gültiger Code.', unknown_code: 'Code unbekannt oder abgelaufen.', network: 'Keine Verbindung zum Relay.' } as Record<string, string>,
     ago: (m: number) => (m < 1 ? 'gerade eben' : m < 60 ? `vor ${m} Min.` : m < 1440 ? `vor ${Math.round(m / 60)} Std.` : `vor ${Math.round(m / 1440)} T.`),
   },
@@ -99,6 +111,18 @@ const T = {
     relay: 'Relay',
     leave: 'Leave the portal on this computer',
     leaveConfirm: 'Remove this computer from the portal?',
+    updates: 'Updates',
+    checkUpdate: 'Check for updates',
+    checking: 'Checking…',
+    upToDate: "You're on the latest version.",
+    updateReady: (v: string) => `Version ${v} is out.`,
+    updateManual: (v: string) => `Version ${v} is out. This copy can't replace itself, so download it.`,
+    updateNow: 'Update now',
+    download: 'Download',
+    downloading: (p: number) => `Downloading… ${p}%`,
+    installing: 'Installing, Zack restarts in a moment…',
+    tryAgain: 'Try again',
+    updateErrors: { network: "Can't reach GitHub right now.", checksum: "The checksum doesn't match, so the update was thrown away.", install: "Installing didn't work." } as Record<string, string>,
     errors: { bad_code: "That isn't a valid code.", unknown_code: 'Unknown or expired code.', network: "Can't reach the relay." } as Record<string, string>,
     ago: (m: number) => (m < 1 ? 'just now' : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} d ago`),
   },
@@ -160,7 +184,11 @@ function skeleton() {
       <div class="row small"><span data-t="relay"></span><code id="relay"></code></div>
       <button class="danger" id="leave" data-t="leave"></button>
     </section>
-    <footer id="foot"></footer>`;
+    <section id="update">
+      <h2 data-t="updates"></h2>
+      <div class="row upd"><div><span id="updVer"></span><small id="updNote"></small></div><button class="ghost" id="updBtn"></button></div>
+      <div class="upd-bar" id="updBar" hidden><i></i></div>
+    </section>`;
 
   app.addEventListener('click', onClick);
   app.addEventListener('change', onChange);
@@ -223,7 +251,32 @@ function render() {
   (document.getElementById('leave') as HTMLButtonElement).hidden = !state.paired;
   const login = app.querySelector<HTMLElement>('input[data-set="launchAtLogin"]')!.closest('.row') as HTMLElement;
   login.hidden = state.platform === 'linux';
-  document.getElementById('foot')!.textContent = `Zack ${state.version} · ${state.self.name}`;
+  renderUpdate();
+}
+
+function renderUpdate() {
+  const L = t();
+  const u = state.update;
+  let label = L.checkUpdate;
+  let note = '';
+  let busy = false;
+  if (u.phase === 'checking') [label, busy] = [L.checking, true];
+  if (u.phase === 'current') note = L.upToDate;
+  if (u.phase === 'available') [label, note] = u.auto ? [L.updateNow, L.updateReady(u.version)] : [L.download, L.updateManual(u.version)];
+  if (u.phase === 'downloading') [label, note, busy] = [L.updateNow, L.downloading(u.progress), true];
+  if (u.phase === 'installing') [label, note, busy] = [L.updateNow, L.installing, true];
+  if (u.phase === 'error') [label, note] = [L.tryAgain, L.updateErrors[u.error] ?? u.error];
+  const btn = document.getElementById('updBtn') as HTMLButtonElement;
+  btn.textContent = label;
+  btn.disabled = busy;
+  btn.classList.toggle('go', u.phase === 'available' || busy);
+  const small = document.getElementById('updNote')!;
+  small.textContent = note;
+  small.classList.toggle('bad', u.phase === 'error');
+  document.getElementById('updVer')!.textContent = `Zack ${state.version}`;
+  const bar = document.getElementById('updBar')!;
+  bar.hidden = u.phase !== 'downloading' && u.phase !== 'installing';
+  (bar.firstElementChild as HTMLElement).style.width = `${u.phase === 'downloading' ? u.progress : 100}%`;
 }
 
 function renderPair() {
@@ -325,6 +378,9 @@ async function onClick(e: MouseEvent) {
     case 'leave':
       if (confirm(t().leaveConfirm)) await bridge.unpair();
       return;
+    case 'updBtn':
+      await (state.update.phase === 'available' ? bridge.installUpdate() : bridge.checkUpdate());
+      return;
   }
 }
 
@@ -408,6 +464,10 @@ function onEvent(e: PortalEvent) {
   if (e.type === 'theme') {
     state.settings.theme = e.theme;
     render();
+  }
+  if (e.type === 'update') {
+    state.update = e.update;
+    renderUpdate();
   }
 }
 

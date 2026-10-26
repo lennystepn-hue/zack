@@ -52,6 +52,8 @@ Download the latest version from **[Releases](https://github.com/lennystepn-hue/
 | **Windows** | `Zack-…-win-setup.exe`, or `Zack-…-win-portable.exe` to run without installing |
 | **Linux** | `Zack-…-linux-x64.AppImage`, or the `.tar.gz` |
 
+From 0.2.1 on Zack updates itself: **Settings → Updates → Update now**. It also looks for a new version every few hours and offers it in the tray menu. The portable Windows exe and the Linux tarball can't replace themselves and open the download page instead.
+
 The builds are not code-signed yet, so the first launch needs one extra click. On macOS, right-click Zack in Applications and choose **Open** (if macOS calls the app damaged, run `xattr -cr /Applications/Zack.app`). On Windows, click **More info → Run anyway** in the SmartScreen dialog.
 
 ## Link two computers
@@ -104,6 +106,7 @@ A small relay on Cloudflare passes things along: a Worker, one Durable Object pe
 - **Safe on arrival.** Nothing received is opened by itself. A click opens documents, images, audio and video; programs, scripts, installers, macro documents and anything unusual are only shown in their folder. Received files carry the system's "downloaded from the internet" mark, so Gatekeeper and SmartScreen check them before they run. File names lose invisible direction tricks, folder archives can neither write nor link outside their folder, and their size and number of entries are capped.
 - **A locked-down app.** Sandboxed renderers with context isolation and a strict content security policy, every message to the app's core checked for where it came from, no navigation, no pop-up windows. Release builds can't be turned into a Node runtime or have a debugger attached (Electron fuses), development switches are ignored, and portal keys live in the system keychain.
 - **Checkable releases.** Every release lists the SHA-256 checksum of each file (`shasum -a 256 -c SHA256SUMS.txt`). Builds run on GitHub Actions with read-only permissions and pinned actions.
+- **Updates** come only from this repository's releases. The app builds the download address itself, checks the file against the release's checksums and, on a Mac, the bundle id and version inside it before installing, and never goes back to an older version. That stops broken or swapped downloads; as long as the builds aren't signed, it relies on this GitHub account staying safe.
 
 The security model was reviewed and the attacks from that review are part of the test suite (`app/scripts/e2e-security.ts`).
 

@@ -16,6 +16,10 @@ A portal between your computers: drop anything onto it and it comes out on your 
 
 Add more devices the same way from the settings.
 
+## Updates
+
+From 0.2.1 on Zack updates itself: Settings → Updates → Update now, or the tray menu when a new version is out.
+
 ## First launch
 
 The builds aren't code-signed yet:

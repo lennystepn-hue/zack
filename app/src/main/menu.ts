@@ -24,7 +24,11 @@ export function portalMenu(svc: PortalService, win: Windows): MenuItemConstructo
   const s = svc.store.settings;
   const others = (svc.client?.devices ?? []).filter((d) => d.id !== svc.store.deviceId);
   const visible = !!win.widget?.isVisible();
+  const update = svc.updateState();
   return [
+    ...(update.phase === 'available'
+      ? ([{ label: `${t.updateTo} ${update.version}…`, click: () => win.openSettings('update') }, { type: 'separator' }] as MenuItemConstructorOptions[])
+      : []),
     { label: visible ? t.hidePortal : t.showPortal, click: () => win.toggleWidget() },
     { label: t.sendClipboard, accelerator: accel(s.hotkey), registerAccelerator: false, enabled: !!svc.client, click: () => void svc.sendClipboard() },
     { type: 'separator' },
@@ -94,7 +98,7 @@ export function createTray(svc: PortalService, win: Windows) {
   if (process.platform === 'linux') {
     const refresh = () => tray.setContextMenu(Menu.buildFromTemplate(portalMenu(svc, win)));
     refresh();
-    svc.on('event', (e) => e.type === 'state' && refresh());
+    svc.on('event', (e) => (e.type === 'state' || e.type === 'update') && refresh());
   }
   return tray;
 }

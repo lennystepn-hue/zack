@@ -4,6 +4,7 @@ import { pathToFileURL } from 'node:url';
 import type { DroppedBuffer, Settings } from '../shared/types';
 import { createTray, itemMenu, portalMenu } from './menu';
 import { PortalService } from './service';
+import { Updater } from './updater';
 import { Windows } from './windows';
 
 // Separate profiles let two instances run side by side on one machine,
@@ -46,11 +47,16 @@ async function boot() {
   s.on('needs-pair', () => w.openSettings('pair'));
   s.on('settings', (next, patch) => applySettings(next, patch));
 
-  registerIpc(s, w);
+  const u = new Updater();
+  s.updateState = () => u.state;
+  u.on('state', (state) => s.announceUpdate(state));
+
+  registerIpc(s, w, u);
   w.createWidget();
   createTray(s, w);
   applySettings(s.store.settings, { hotkey: s.store.settings.hotkey, ...(s.store.settings.launchAtLogin ? { launchAtLogin: true } : {}) });
   s.start();
+  u.start();
   if (!s.store.room) setTimeout(() => w.openSettings('pair'), 900);
 
   powerMonitor.on('resume', () => s.nudge());
@@ -81,7 +87,7 @@ function trusted(e: IpcMainEvent | IpcMainInvokeEvent) {
   return url.startsWith(pathToFileURL(join(__dirname, '../renderer')).href);
 }
 
-function registerIpc(s: PortalService, w: Windows) {
+function registerIpc(s: PortalService, w: Windows, u: Updater) {
   const handle = (channel: string, fn: (...args: any[]) => unknown) =>
     ipcMain.handle(channel, (e, ...args) => {
       if (!trusted(e)) throw new Error('untrusted sender');
@@ -139,6 +145,8 @@ function registerIpc(s: PortalService, w: Windows) {
   handle('portal:reveal-item', (id: unknown) => s.revealItem(str(id, 64)));
   handle('portal:copy-item', (id: unknown) => s.copyItem(str(id, 64)));
   handle('portal:remove-item', (id: unknown) => s.removeItem(str(id, 64)));
+  handle('portal:check-update', () => u.check(true));
+  handle('portal:install-update', () => u.install());
 
   on('portal:start-drag', (e, id: unknown) => {
     const d = s.dragIcon(str(id, 64));
